@@ -8,33 +8,32 @@ from telegram.ext import (
 )
 
 # =========================
-# CONFIG
+# CONFIG (AS YOU PROVIDED)
 # =========================
 BOT_TOKEN = "8247238867:AAFegzRzyLUkK5CHVK535L4ZshwHxXsCHVo"
-ADMIN_ID = 6541825979      # Your Telegram ID
+ADMIN_ID = 6541825979
 USDT_ADDRESS = "TUmPVgYgFSw2cSigkCS276Rxxomm9mvdAh"
-MIN_DEPOSIT = 50.0        # Minimum Deposit Required to Activate
-RATE = 0.40               # $0.40 per 1 Credit
+
+MIN_DEPOSIT = 50.0
+RATE = 0.40  # $0.40 = 1 Credit
 
 # =========================
-# IN-MEMORY USER DATABASE
+# TEMP USER DATABASE
 # =========================
-users = {}  # user_id : {"username": str, "balance": float, "active": bool}
+users = {}  # user_id: {username, balance, active}
 
 # =========================
 # LOGGING
 # =========================
 logging.basicConfig(level=logging.INFO)
 
-
 # =========================
-# START
+# /start
 # =========================
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
     uid = user.id
 
-    # Create user record if not exists
     if uid not in users:
         users[uid] = {
             "username": user.username,
@@ -42,135 +41,130 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "active": False
         }
 
-    msg = f"""
+    text = f"""
 👋 Hello **{user.first_name}!**
 
-Welcome to our official digital credit service.
-
-💠 We offer **Virtual Credits**  
-💠 Price rate: **$0.40 per 1 Credit**  
-💠 Minimum deposit required to activate your account: **${MIN_DEPOSIT}**
-
-Once your account is activated, you will be able to:
-- Purchase credits  
-- Use premium services  
-- Access your balance  
-- Unlock full bot features  
+💠 Virtual Credit Service  
+💠 Rate: **$0.40 = 1 Credit**  
+💠 Minimum Deposit: **${MIN_DEPOSIT}**
 
 Choose an option below:
 """
 
-    buttons = [
+    keyboard = [
         [InlineKeyboardButton("💳 Deposit", callback_data="deposit")],
         [InlineKeyboardButton("📊 My Balance", callback_data="balance")],
         [InlineKeyboardButton("ℹ️ Rate Info", callback_data="rate")]
     ]
 
     await update.message.reply_text(
-        msg,
-        reply_markup=InlineKeyboardMarkup(buttons),
+        text,
+        reply_markup=InlineKeyboardMarkup(keyboard),
         parse_mode="Markdown"
     )
 
-
 # =========================
-# CALLBACK BUTTONS
+# BUTTON HANDLER
 # =========================
 async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
-    user_id = query.from_user.id
     await query.answer()
+
+    user = query.from_user
+    uid = user.id
+
+    if uid not in users:
+        users[uid] = {
+            "username": user.username,
+            "balance": 0.0,
+            "active": False
+        }
 
     if query.data == "deposit":
         await query.edit_message_text(
             f"""
 💳 **Deposit Instructions**
 
-To activate your account, please make a minimum deposit of **${MIN_DEPOSIT}**.
+Minimum deposit: **${MIN_DEPOSIT}**
 
-Send USDT (TRC20) to the address below:
-
+Send **USDT (TRC20)** to:
 `{USDT_ADDRESS}`
 
-Once completed, send a payment screenshot to the admin for approval.
+After payment, send screenshot to admin.
 
-👨‍💼 Admin Contact:  
-@{context.bot.username}_admin
+👨‍💼 Admin:
+tg://user?id={ADMIN_ID}
             """,
             parse_mode="Markdown"
         )
 
     elif query.data == "balance":
-        balance = users[user_id]["balance"]
-        status = "Active ✅" if users[user_id]["active"] else "Not Active ❌"
+        u = users[uid]
+        status = "Active ✅" if u["active"] else "Not Active ❌"
+        credits = u["balance"] / RATE if u["balance"] > 0 else 0
 
         await query.edit_message_text(
             f"""
-📊 **Your Account Status**
+📊 **Your Account**
 
-Status: **{status}**  
-Balance: **${balance:.2f}**
-
-Minimum Deposit: **${MIN_DEPOSIT}**
-Rate: **$0.40 = 1 Credit**
+Status: **{status}**
+Balance: **${u['balance']:.2f}**
+Credits: **{credits:.2f}**
             """,
             parse_mode="Markdown"
         )
 
     elif query.data == "rate":
         await query.edit_message_text(
-            f"""
-💱 **Credit Rate Information**
+            """
+💱 **Credit Rate**
 
-➡️ **$1 = 2.5 Credits**  
-➡️ **1 Credit = $0.40**
+$1 = 2.5 Credits  
+1 Credit = $0.40
 
 Example:
-- $10 gives 25 credits  
-- $50 gives 125 credits  
-
-Credits are used to access and unlock various digital services.
+$10 → 25 Credits  
+$50 → 125 Credits
             """,
             parse_mode="Markdown"
         )
 
-
 # =========================
-# ADMIN COMMANDS
+# ADMIN COMMAND
 # =========================
 async def add_balance(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Admin adds balance to a user."""
     if update.effective_user.id != ADMIN_ID:
         return
 
-    if len(context.args) < 2:
+    if len(context.args) != 2:
         await update.message.reply_text("Usage: /addbalance user_id amount")
         return
 
     try:
         user_id = int(context.args[0])
         amount = float(context.args[1])
+        if amount <= 0:
+            raise ValueError
     except ValueError:
-        await update.message.reply_text("Invalid input format.")
+        await update.message.reply_text("Invalid input.")
         return
 
     if user_id not in users:
-        await update.message.reply_text("User not found in database.")
-        return
+        users[user_id] = {
+            "username": None,
+            "balance": 0.0,
+            "active": False
+        }
 
-    # Update balance
     users[user_id]["balance"] += amount
 
-    # Auto-activate when deposit reaches the required minimum
     if users[user_id]["balance"] >= MIN_DEPOSIT:
         users[user_id]["active"] = True
 
     await update.message.reply_text(
-        f"Successfully added ${amount:.2f} to user {user_id}.\n"
-        f"New Balance: **${users[user_id]['balance']:.2f}**",
-        parse_mode="Markdown"
+        f"✅ Added ${amount:.2f}\n"
+        f"New Balance: ${users[user_id]['balance']:.2f}"
     )
-
 
 # =========================
 # MAIN
@@ -182,9 +176,8 @@ def main():
     app.add_handler(CommandHandler("addbalance", add_balance))
     app.add_handler(CallbackQueryHandler(button_handler))
 
-    print("Bot is now running...")
+    print("Bot is running...")
     app.run_polling()
-
 
 if __name__ == "__main__":
     main()
