@@ -6,9 +6,10 @@ from telegram.ext import (
     CallbackQueryHandler,
     ContextTypes
 )
+import asyncio
 
 # =========================
-# CONFIG (AS YOU PROVIDED)
+# CONFIG
 # =========================
 BOT_TOKEN = "8247238867:AAFegzRzyLUkK5CHVK535L4ZshwHxXsCHVo"
 ADMIN_ID = 6541825979
@@ -169,7 +170,7 @@ async def add_balance(update: Update, context: ContextTypes.DEFAULT_TYPE):
 # =========================
 # MAIN
 # =========================
-def main():
+async def main():
     app = ApplicationBuilder().token(BOT_TOKEN).build()
 
     app.add_handler(CommandHandler("start", start))
@@ -177,7 +178,7 @@ def main():
     app.add_handler(CallbackQueryHandler(button_handler))
 
     print("Bot is running...")
-    app.run_polling()
+    await app.run_polling()
 
 if __name__ == "__main__":
-    main()
+    asyncio.run(main())
